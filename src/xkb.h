@@ -154,6 +154,8 @@ public:
     bool updateToKeymapForKeySym(xkb_keycode_t newKeycode,
                                  xkb_keysym_t customSym);
 
+    static QList<xkb_keysym_t> textToKeySyms(const QString &inputString);
+
 public Q_SLOTS:
     void reconfigure();
 

@@ -1381,6 +1381,31 @@ xkb_keymap *Xkb::createKeymapForKeysym(xkb_keycode_t newKeycode,
     return newMap;
 }
 
+QList<xkb_keysym_t> Xkb::textToKeySyms(const QString &inputString)
+{
+    QList<xkb_keysym_t> result;
+
+    for (int i = 0; i < inputString.size(); ++i) {
+        char32_t cp = inputString[i].unicode();
+
+        // Handle surrogate pair (two QChars → one codepoint)
+        if (inputString[i].isHighSurrogate() && i + 1 < inputString.size()
+            && inputString[i + 1].isLowSurrogate()) {
+            cp = QChar::surrogateToUcs4(inputString[i].unicode(),
+                                        inputString[i + 1].unicode());
+            i++; // skip the low surrogate
+        }
+
+        xkb_keysym_t ks = xkb_utf32_to_keysym(cp);
+        if (ks != XKB_KEY_NoSymbol) {
+            result.append(ks);
+        } else {
+            qCWarning(KWIN_VIRTUALKEYBOARD) << "No keysym for U+" << &std::hex << (int)cp << "\n";
+        }
+    }
+    return result;
+}
+
 }
 
 #include "moc_xkb.cpp"
