@@ -20,6 +20,7 @@ class QAction;
 namespace KWin
 {
 
+class ConfigurableGesture;
 class GLFramebuffer;
 class GLTexture;
 

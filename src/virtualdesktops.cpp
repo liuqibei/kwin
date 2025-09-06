@@ -7,10 +7,13 @@
 
     SPDX-License-Identifier: GPL-2.0-or-later
 */
+
 #include "virtualdesktops.h"
+
 #if KWIN_BUILD_ACTIVITIES
 #include "activities.h"
 #endif
+#include "configurablegesture.h"
 #include "core/output.h"
 #include "input.h"
 #include "wayland/plasmavirtualdesktop.h"
@@ -240,8 +243,6 @@ VirtualDesktopManager::VirtualDesktopManager(QObject *parent)
 #if KWIN_BUILD_X11
     , m_rootInfo(nullptr)
 #endif
-    , m_swipeGestureReleasedY(new QAction(this))
-    , m_swipeGestureReleasedX(new QAction(this))
 {
 }
 
@@ -781,9 +782,17 @@ void VirtualDesktopManager::initShortcuts()
     KGlobalAccel::setInverseShortcutActions(upAction, downAction);
 
     // Gestures
+    ConfigurableGesture *rightGesture = input()->registerGesture(rightAction);
+    ConfigurableGesture *leftGesture = input()->registerGesture(leftAction);
+    ConfigurableGesture *downGesture = input()->registerGesture(downAction);
+    ConfigurableGesture *upGesture = input()->registerGesture(upAction);
+
     // These connections decide which desktop to end on after gesture ends
-    connect(m_swipeGestureReleasedX.get(), &QAction::triggered, this, &VirtualDesktopManager::gestureReleasedX);
-    connect(m_swipeGestureReleasedY.get(), &QAction::triggered, this, &VirtualDesktopManager::gestureReleasedY);
+    connect(rightGesture, &ConfigurableGesture::released, this, &VirtualDesktopManager::gestureReleasedX);
+    connect(leftGesture, &ConfigurableGesture::released, this, &VirtualDesktopManager::gestureReleasedX);
+    connect(downGesture, &ConfigurableGesture::released, this, &VirtualDesktopManager::gestureReleasedY);
+    connect(upGesture, &ConfigurableGesture::released, this, &VirtualDesktopManager::gestureReleasedY);
+
     const auto emitCurrentChanging = [this]() {
         if (m_perOutputVirtualDesktops) {
             LogicalOutput *output = workspace()->activeOutput();
@@ -796,36 +805,30 @@ void VirtualDesktopManager::initShortcuts()
         }
     };
 
-    const auto left = [this, emitCurrentChanging](qreal cb) {
-        if (grid().width() > 1) {
-            m_currentDesktopOffset.setX(cb);
-            emitCurrentChanging();
-        }
-    };
-    const auto right = [this, emitCurrentChanging](qreal cb) {
+    connect(rightGesture, &ConfigurableGesture::progress, this, [this, emitCurrentChanging](qreal cb) -> void {
         if (grid().width() > 1) {
             m_currentDesktopOffset.setX(-cb);
             emitCurrentChanging();
         }
-    };
-    input()->registerTouchpadSwipeShortcut(SwipeDirection::Left, 3, m_swipeGestureReleasedX.get(), left);
-    input()->registerTouchpadSwipeShortcut(SwipeDirection::Right, 3, m_swipeGestureReleasedX.get(), right);
-    input()->registerTouchpadSwipeShortcut(SwipeDirection::Left, 4, m_swipeGestureReleasedX.get(), left);
-    input()->registerTouchpadSwipeShortcut(SwipeDirection::Right, 4, m_swipeGestureReleasedX.get(), right);
-    input()->registerTouchpadSwipeShortcut(SwipeDirection::Down, 3, m_swipeGestureReleasedY.get(), [this, emitCurrentChanging](qreal cb) {
+    });
+    connect(leftGesture, &ConfigurableGesture::progress, this, [this, emitCurrentChanging](qreal cb) -> void {
+        if (grid().width() > 1) {
+            m_currentDesktopOffset.setX(cb);
+            emitCurrentChanging();
+        }
+    });
+    connect(downGesture, &ConfigurableGesture::progress, this, [this, emitCurrentChanging](qreal cb) -> void {
         if (grid().height() > 1) {
             m_currentDesktopOffset.setY(-cb);
             emitCurrentChanging();
         }
     });
-    input()->registerTouchpadSwipeShortcut(SwipeDirection::Up, 3, m_swipeGestureReleasedY.get(), [this, emitCurrentChanging](qreal cb) {
+    connect(upGesture, &ConfigurableGesture::progress, this, [this, emitCurrentChanging](qreal cb) -> void {
         if (grid().height() > 1) {
             m_currentDesktopOffset.setY(cb);
             emitCurrentChanging();
         }
     });
-    input()->registerTouchscreenSwipeShortcut(SwipeDirection::Left, 3, m_swipeGestureReleasedX.get(), left);
-    input()->registerTouchscreenSwipeShortcut(SwipeDirection::Right, 3, m_swipeGestureReleasedX.get(), right);
 
     // axis events
     input()->registerAxisShortcut(Qt::MetaModifier | Qt::AltModifier, PointerAxisDown,

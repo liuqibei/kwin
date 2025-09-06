@@ -22,6 +22,7 @@
 namespace KWin
 {
 
+class ConfigurableGesture;
 class CursorItem;
 class GLFramebuffer;
 class GLTexture;
