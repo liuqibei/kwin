@@ -496,7 +496,7 @@ void Item::scheduleRepaintInternal(RenderView *view, const RegionF &region)
     }
 }
 
-void Item::scheduleFrame()
+void Item::scheduleFrame(std::optional<std::chrono::steady_clock::time_point> targetTime)
 {
     if (!isVisible()) {
         return;
@@ -728,6 +728,29 @@ void Item::framePainted(RenderView *view, LogicalOutput *output, OutputFrame *fr
             child->framePainted(view, output, frame, timestamp);
         }
     }
+}
+
+void Item::prepareFrame(SceneView *view, LogicalOutput *output, std::chrono::nanoseconds timestamp)
+{
+    // The visibility of the item itself is not checked here to be able to paint hidden items for
+    // things like screncasts or thumbnails
+    handlePrepareFrame(timestamp);
+    for (const auto child : std::as_const(m_childItems)) {
+        if (!child->explicitVisible()) {
+            continue;
+        }
+        if (view && view->shouldHideItem(child)) {
+            continue;
+        }
+        if (view && !view->viewport().intersects(child->mapToView(child->boundingRect(), view))) {
+            continue;
+        }
+        child->prepareFrame(view, output, timestamp);
+    }
+}
+
+void Item::handlePrepareFrame(std::chrono::nanoseconds timestamp)
+{
 }
 
 bool Item::isAncestorOf(const Item *item) const

@@ -484,7 +484,7 @@ SurfaceInterface::~SurfaceInterface()
 {
     d->m_tearingDown = true;
     if (d->firstTransaction) {
-        d->firstTransaction->tryApply();
+        d->firstTransaction->tryApply(std::nullopt);
     }
 }
 
@@ -539,7 +539,7 @@ void SurfaceInterface::nextRoleGeneration()
 {
     d->mainSurfaceRoleGeneration++;
     if (d->firstTransaction) {
-        d->firstTransaction->tryApply();
+        d->firstTransaction->tryApply(std::nullopt);
     }
 }
 
@@ -662,6 +662,7 @@ void SurfaceState::mergeInto(SurfaceState *target)
     target->presentationFeedback = std::move(presentationFeedback);
     target->blurRegion = blurRegion;
     target->mainSurfaceRoleGeneration = mainSurfaceRoleGeneration;
+    target->requestedTiming = std::exchange(requestedTiming, std::nullopt);
 
     auto previousExtensions = std::exchange(target->extensions, {});
     for (const auto &[extension, sourceState] : extensions) {
@@ -1306,6 +1307,17 @@ Transaction *SurfaceInterface::firstTransaction() const
 void SurfaceInterface::setFirstTransaction(Transaction *transaction)
 {
     d->firstTransaction = transaction;
+    if (transaction) {
+        TransactionEntry *entry = transaction->entry(this);
+        if (entry && entry->state->requestedTiming) {
+            if (isMapped()) {
+                Q_EMIT waitingOnCommitTiming();
+            } else {
+                // this constraint will never be satisifed
+                entry->state->requestedTiming.reset();
+            }
+        }
+    }
 }
 
 Transaction *SurfaceInterface::lastTransaction() const
@@ -1345,7 +1357,7 @@ void SurfaceInterface::clearFifoBarrier()
     if (d->current->fifoBarrier) {
         d->current->fifoBarrier = false;
         if (d->firstTransaction) {
-            d->firstTransaction->tryApply();
+            d->firstTransaction->tryApply(std::nullopt);
         }
     }
 }
@@ -1353,6 +1365,23 @@ void SurfaceInterface::clearFifoBarrier()
 bool SurfaceInterface::hasFifoBarrier() const
 {
     return d->current->fifoBarrier;
+}
+
+void SurfaceInterface::prepareFrame(std::chrono::nanoseconds timestamp)
+{
+    if (d->firstTransaction) {
+        // TODO port the other timestamps to use an actual timestamp type as well
+        d->firstTransaction->tryApply(std::chrono::steady_clock::time_point(timestamp));
+    }
+}
+
+std::optional<std::chrono::steady_clock::time_point> SurfaceInterface::requestedTimingOfNextCommit() const
+{
+    if (d->firstTransaction) {
+        return d->firstTransaction->targetTimestamp(this);
+    } else {
+        return std::nullopt;
+    }
 }
 
 } // namespace KWin

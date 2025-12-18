@@ -36,9 +36,9 @@ class AlphaModifierSurfaceV1;
 class FifoV1Surface;
 class FifoBarrier;
 class ColorRepresentationSurfaceV1;
-class ExtBlurSurfaceV1;
 class ExtBackgroundEffectSurfaceV1;
 class SyncObjReleasePoint;
+class CommitTimingSurfaceV1;
 
 struct SurfaceState
 {
@@ -101,6 +101,7 @@ struct SurfaceState
     bool hasFifoWaitCondition = false;
     RegionF blurRegion;
     uint32_t mainSurfaceRoleGeneration = 0;
+    std::optional<std::chrono::steady_clock::time_point> requestedTiming;
 
     struct
     {
@@ -205,8 +206,8 @@ public:
     AlphaModifierSurfaceV1 *alphaModifier = nullptr;
     FifoV1Surface *fifoSurface = nullptr;
     ColorRepresentationSurfaceV1 *colorRepresentation = nullptr;
-    ExtBlurSurfaceV1 *extBlur = nullptr;
     ExtBackgroundEffectSurfaceV1 *extBackgroundeffect = nullptr;
+    CommitTimingSurfaceV1 *commitTiming = nullptr;
 
     struct
     {
