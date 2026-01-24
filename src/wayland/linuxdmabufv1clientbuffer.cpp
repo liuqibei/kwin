@@ -28,7 +28,7 @@
 namespace KWin
 {
 
-static const int s_version = 5;
+static const int s_version = 6;
 
 LinuxDmaBufV1ClientBufferIntegrationPrivate::LinuxDmaBufV1ClientBufferIntegrationPrivate(LinuxDmaBufV1ClientBufferIntegration *q, Display *display)
     : QtWaylandServer::zwp_linux_dmabuf_v1(*display, s_version)
@@ -103,7 +103,9 @@ LinuxDmaBufParamsV1::LinuxDmaBufParamsV1(LinuxDmaBufV1ClientBufferIntegration *i
     : QtWaylandServer::zwp_linux_buffer_params_v1(resource)
     , m_integration(integration)
 {
-    m_attrs.device = integration->mainDevice(wl_resource_get_client(resource));
+    if (wl_resource_get_version(resource) < ZWP_LINUX_BUFFER_PARAMS_V1_SET_SAMPLING_DEVICE_SINCE_VERSION) {
+        m_attrs.device = integration->mainDevice(wl_resource_get_client(resource));
+    }
 }
 
 void LinuxDmaBufParamsV1::zwp_linux_buffer_params_v1_destroy_resource(Resource *resource)
@@ -176,7 +178,24 @@ void LinuxDmaBufParamsV1::zwp_linux_buffer_params_v1_create(Resource *resource, 
     m_attrs.format = format;
 
     auto clientBuffer = new LinuxDmaBufV1ClientBuffer(std::move(m_attrs));
-    if (!renderBackend->testImportBuffer(clientBuffer)) {
+    const dev_t target = m_targetDevice.value_or(m_integration->mainDevice(resource->client()));
+    const auto &devices = GpuManager::s_self->renderDevices();
+    bool success = renderBackend->testImportBuffer(clientBuffer, target);
+    if (success) {
+        clientBuffer->setDevice(target);
+    } else {
+        for (const auto &device : devices) {
+            if (device->drmDevice()->deviceId() == target) {
+                continue;
+            }
+            success = renderBackend->testImportBuffer(clientBuffer, device->drmDevice()->deviceId());
+            if (success) {
+                clientBuffer->setDevice(device->drmDevice()->deviceId());
+                break;
+            }
+        }
+    }
+    if (!success) {
         send_failed(resource->handle);
         clientBuffer->drop();
         return;
@@ -227,7 +246,24 @@ void LinuxDmaBufParamsV1::zwp_linux_buffer_params_v1_create_immed(Resource *reso
     m_attrs.format = format;
 
     auto clientBuffer = new LinuxDmaBufV1ClientBuffer(std::move(m_attrs));
-    if (!renderBackend->testImportBuffer(clientBuffer)) {
+    const dev_t target = m_targetDevice.value_or(m_integration->mainDevice(resource->client()));
+    const auto &devices = GpuManager::s_self->renderDevices();
+    bool success = renderBackend->testImportBuffer(clientBuffer, target);
+    if (success) {
+        clientBuffer->setDevice(target);
+    } else {
+        for (const auto &device : devices) {
+            if (device->drmDevice()->deviceId() == target) {
+                continue;
+            }
+            success = renderBackend->testImportBuffer(clientBuffer, device->drmDevice()->deviceId());
+            if (success) {
+                clientBuffer->setDevice(device->drmDevice()->deviceId());
+                break;
+            }
+        }
+    }
+    if (!success) {
         wl_resource_post_error(resource->handle, error_invalid_wl_buffer, "importing the supplied dmabufs failed");
         clientBuffer->drop();
         return;
@@ -241,6 +277,15 @@ void LinuxDmaBufParamsV1::zwp_linux_buffer_params_v1_create_immed(Resource *reso
     }
 
     clientBuffer->initialize(bufferResource);
+}
+
+void LinuxDmaBufParamsV1::zwp_linux_buffer_params_v1_set_sampling_device(Resource *resource, wl_array *device)
+{
+    if (device->size < sizeof(dev_t)) {
+        wl_resource_post_error(resource->handle, error_invalid_dev_t_size, "Incomplete dev_t sent!");
+        return;
+    }
+    m_targetDevice = *reinterpret_cast<dev_t *>(device->data);
 }
 
 bool LinuxDmaBufParamsV1::test(Resource *resource, uint32_t width, uint32_t height)
@@ -393,6 +438,11 @@ const DmaBufAttributes *LinuxDmaBufV1ClientBuffer::dmabufAttributes() const
     return &m_attrs;
 }
 
+void LinuxDmaBufV1ClientBuffer::setDevice(dev_t deviceId)
+{
+    m_attrs.device = deviceId;
+}
+
 QSize LinuxDmaBufV1ClientBuffer::size() const
 {
     return QSize(m_attrs.width, m_attrs.height);
@@ -473,6 +523,8 @@ QList<LinuxDmaBufV1Feedback::Tranche> LinuxDmaBufV1Feedback::createScanoutTranch
         }
         if (!scanoutTranche.formatTable.isEmpty()) {
             scanoutTranche.device = scanoutDevice->deviceId();
+            // TODO this was previously only TrancheFlag::Scanout in this branch.
+            // Why did you change your mind about it on master?
             scanoutTranche.flags = tranche.flags | LinuxDmaBufV1Feedback::TrancheFlag::Scanout;
             ret.push_back(scanoutTranche);
         }
@@ -495,10 +547,18 @@ void LinuxDmaBufV1FeedbackPrivate::send(Resource *resource)
 {
     const dev_t mainDevice = m_bufferintegration->q->mainDevice(resource->client());
     send_format_table(resource->handle, m_bufferintegration->table->file.fd(), m_bufferintegration->table->file.size());
-    QByteArray bytes;
-    bytes.append(reinterpret_cast<const char *>(&mainDevice), sizeof(dev_t));
-    send_main_device(resource->handle, bytes);
-    const auto sendTranche = [this, resource](const LinuxDmaBufV1Feedback::Tranche &tranche) {
+    if (resource->version() < ZWP_LINUX_BUFFER_PARAMS_V1_SET_SAMPLING_DEVICE_SINCE_VERSION) {
+        QByteArray bytes;
+        bytes.append(reinterpret_cast<const char *>(&mainDevice), sizeof(dev_t));
+        send_main_device(resource->handle, bytes);
+    }
+    const auto sendTranche = [this, resource, mainDevice](const LinuxDmaBufV1Feedback::Tranche &tranche) {
+        const bool supportsSamplingTranche = resource->version() >= ZWP_LINUX_DMABUF_FEEDBACK_V1_TRANCHE_FLAGS_SAMPLING_SINCE_VERSION;
+        if (!supportsSamplingTranche
+            && tranche.flags == LinuxDmaBufV1Feedback::TrancheFlag::Sampling
+            && tranche.device != mainDevice) {
+            return;
+        }
         QByteArray targetDevice;
         targetDevice.append(reinterpret_cast<const char *>(&tranche.device), sizeof(dev_t));
         QByteArray indices;
@@ -514,6 +574,10 @@ void LinuxDmaBufV1FeedbackPrivate::send(Resource *resource)
         uint32_t flags = 0;
         if (tranche.flags & LinuxDmaBufV1Feedback::TrancheFlag::Scanout) {
             flags |= tranche_flags_scanout;
+        }
+        if (resource->version() >= ZWP_LINUX_BUFFER_PARAMS_V1_SET_SAMPLING_DEVICE_SINCE_VERSION
+            && tranche.flags & LinuxDmaBufV1Feedback::TrancheFlag::Sampling) {
+            flags |= tranche_flags_sampling;
         }
         send_tranche_flags(resource->handle, flags);
         send_tranche_done(resource->handle);
