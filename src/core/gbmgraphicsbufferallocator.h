@@ -7,6 +7,7 @@
 #pragma once
 
 #include "core/graphicsbufferallocator.h"
+#include "utils/filedescriptor.h"
 
 #include <sys/types.h>
 
@@ -26,6 +27,7 @@ public:
 private:
     gbm_device *const m_gbmDevice;
     const dev_t m_deviceId;
+    const FileDescriptor m_udmabuf;
 };
 
 } // namespace KWin

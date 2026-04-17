@@ -23,60 +23,9 @@
 namespace KWin
 {
 
-static std::unique_ptr<RenderDevice> findRenderDevice()
-{
-#if !HAVE_LIBDRM_FAUX
-#if defined(Q_OS_LINUX)
-    // Workaround for libdrm being unaware of faux bus.
-    if (qEnvironmentVariableIsSet("CI")) {
-        return RenderDevice::open(QStringLiteral("/dev/dri/card1"));
-    }
-#endif
-#endif
-
-    const int deviceCount = drmGetDevices2(0, nullptr, 0);
-    if (deviceCount <= 0) {
-        return nullptr;
-    }
-
-    QList<drmDevice *> devices(deviceCount);
-    if (drmGetDevices2(0, devices.data(), devices.size()) < 0) {
-        return nullptr;
-    }
-    auto deviceCleanup = qScopeGuard([&devices]() {
-        drmFreeDevices(devices.data(), devices.size());
-    });
-
-    for (drmDevice *device : std::as_const(devices)) {
-        // If it's a vgem device, prefer the primary node because gbm will attempt to allocate
-        // dumb buffers and they can be allocated only on the primary node.
-        int nodeType = DRM_NODE_RENDER;
-        if (device->bustype == DRM_BUS_PLATFORM) {
-            if (strcmp(device->businfo.platform->fullname, "vgem") == 0) {
-                nodeType = DRM_NODE_PRIMARY;
-            }
-        }
-#if HAVE_LIBDRM_FAUX
-        if (device->bustype == DRM_BUS_FAUX) {
-            if (strcmp(device->businfo.faux->name, "vgem") == 0) {
-                nodeType = DRM_NODE_PRIMARY;
-            }
-        }
-#endif
-
-        if (device->available_nodes & (1 << nodeType)) {
-            if (auto ret = RenderDevice::open(device->nodes[nodeType])) {
-                return ret;
-            }
-        }
-    }
-
-    return nullptr;
-}
-
 VirtualBackend::VirtualBackend(QObject *parent)
     : OutputBackend(parent)
-    , m_renderDevice(findRenderDevice())
+    , m_renderDevice(GpuManager::self()->renderDevices().front().get())
 {
 }
 
@@ -179,7 +128,7 @@ void VirtualBackend::setVirtualOutputs(const QList<OutputInfo> &infos)
 
 RenderDevice *VirtualBackend::renderDevice() const
 {
-    return m_renderDevice.get();
+    return m_renderDevice;
 }
 
 EglDisplay *VirtualBackend::sceneEglDisplayObject() const
