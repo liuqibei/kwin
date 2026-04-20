@@ -111,6 +111,7 @@ QDBusUnixFileDescriptor EisBackend::connectToEIS(const int &capabilities, int &c
     QFlags<eis_device_capability> eisCapabilities;
     if (capabilities & keyboardPortal) {
         eisCapabilities |= EIS_DEVICE_CAP_KEYBOARD;
+        eisCapabilities |= EIS_DEVICE_CAP_TEXT;
     }
     if (capabilities & pointerPortal) {
         eisCapabilities |= EIS_DEVICE_CAP_POINTER;
@@ -193,6 +194,12 @@ eis_device *EisBackend::createKeyboard(eis_seat *seat)
         eis_keymap_unref(keymap);
     }
 
+    return device;
+}
+eis_device *EisBackend::createText(eis_seat *seat)
+{
+    auto device = createDevice(seat, "eis text");
+    eis_device_configure_capability(device, EIS_DEVICE_CAP_TEXT);
     return device;
 }
 

@@ -1400,7 +1400,7 @@ QList<xkb_keysym_t> Xkb::textToKeySyms(const QString &inputString)
         if (ks != XKB_KEY_NoSymbol) {
             result.append(ks);
         } else {
-            qCWarning(KWIN_VIRTUALKEYBOARD) << "No keysym for U+" << &std::hex << (int)cp << "\n";
+            qWarning() << "No keysym for U+" << &std::hex << (int)cp << "\n";
         }
     }
     return result;

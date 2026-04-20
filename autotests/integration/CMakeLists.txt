@@ -208,11 +208,8 @@ endif()
 if (KWIN_BUILD_EIS)
     pkg_check_modules(PKG_libei REQUIRED IMPORTED_TARGET libei-1.0)
     integrationTest(NAME testInputCapture SRCS input_capture_test.cpp  LIBS PkgConfig::PKG_libei PROPERTIES RUN_SERIAL TRUE)
-    if (PKG_libei_VERSION VERSION_GREATER_EQUAL "1.4.0")
-        target_compile_definitions(testInputCapture PRIVATE -DHAVE_EI_EVENT_SYNC=1)
-    else()
-        target_compile_definitions(testInputCapture PRIVATE -DHAVE_EI_EVENT_SYNC=0)
-    endif()
+    integrationTest(NAME testLibeiInput SRCS libei_test.cpp LIBS PkgConfig::PKG_libei PROPERTIES RUN_SERIAL TRUE)
+    target_compile_definitions(testInputCapture PRIVATE -DHAVE_EI_EVENT_SYNC=1)
 endif()
 
 
