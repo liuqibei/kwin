@@ -149,8 +149,10 @@ void ZoomEffect::reconfigure(ReconfigureFlags)
     m_pixelGridZoom = ZoomConfig::pixelGridZoom();
     // Track moving of the mouse.
     m_mouseTracking = MouseTrackingType(ZoomConfig::mouseTracking());
-    // Pixel gap between edge of screen and push boundary when using MouseTrackingPush
+    // Percentage of screen area reserved for mouse panning when using MouseTrackingPush
     m_pushEdgeThreshold = ZoomConfig::pushEdgeThreshold();
+    // Percentage of screen area reserved for focus/caret panning when using MouseTrackingPush
+    m_pushEdgeThresholdFocusTracking = ZoomConfig::pushEdgeThresholdFocusTracking();
 
     if (ZoomConfig::enableFocusTracking()) {
         if (m_targetZoom > 1) {
@@ -225,6 +227,8 @@ void ZoomEffect::prePaintScreen(ScreenPrePaintData &data)
 
     QPoint trackPoint = m_cursorPoint;
 
+    bool trackingFocus = false;
+
     // use the focusPoint if focus tracking is enabled
     if (m_focusPoint) {
         bool acceptFocus = true;
@@ -235,6 +239,7 @@ void ZoomEffect::prePaintScreen(ScreenPrePaintData &data)
         }
         if (acceptFocus) {
             trackPoint = *m_focusPoint;
+            trackingFocus = true;
             if (m_mouseTracking == MouseTrackingDisabled) {
                 m_prevPoint = trackPoint;
             }
@@ -267,8 +272,9 @@ void ZoomEffect::prePaintScreen(ScreenPrePaintData &data)
         const int x = trackPoint.x() * m_zoom - m_prevPoint.x() * (m_zoom - 1.0);
         const int y = trackPoint.y() * m_zoom - m_prevPoint.y() * (m_zoom - 1.0);
         const RectF currentScreen = effects->screenAt(QPoint(x, y))->geometry();
-        double horizontalThreshold = std::round(currentScreen.width() / 2.0 * std::min(1.0, std::max(0.0, m_pushEdgeThreshold)));
-        double verticalThreshold = std::round(currentScreen.height() / 2.0 * std::min(1.0, std::max(0.0, m_pushEdgeThreshold)));
+        double threshold = trackingFocus ? m_pushEdgeThresholdFocusTracking : m_pushEdgeThreshold;
+        double horizontalThreshold = std::round(currentScreen.width() / 2.0 * std::min(1.0, std::max(0.0, threshold)));
+        double verticalThreshold = std::round(currentScreen.height() / 2.0 * std::min(1.0, std::max(0.0, threshold)));
 
         // bounds of the screen the cursor's on
         const int screenTop = currentScreen.top();

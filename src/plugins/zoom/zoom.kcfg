@@ -40,5 +40,8 @@
         <entry name="PushEdgeThreshold" type="Double">
             <default>0.01</default>
         </entry>
+        <entry name="PushEdgeThresholdFocusTracking" type="Double">
+            <default>0.01</default>
+        </entry>
     </group>
 </kcfg>
