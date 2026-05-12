@@ -324,19 +324,19 @@ void TabBox::initShortcuts()
 {
     QAction *windowsAction = key(s_windows, &TabBox::slotWalkThroughWindows, {Qt::MetaModifier | Qt::Key_Tab, Qt::AltModifier | Qt::Key_Tab});
     QAction *windowsRevAction = key(s_windowsRev, &TabBox::slotWalkBackThroughWindows, {Qt::MetaModifier | Qt::ShiftModifier | Qt::Key_Tab, Qt::AltModifier | Qt::ShiftModifier | Qt::Key_Tab});
-    KGlobalAccel::setInverseShortcutActions(windowsAction, windowsRevAction, KGlobalAccel::OptionalCoupling);
+    KGlobalAccel::setInverseShortcutActions(windowsAction, windowsRevAction);
 
     QAction *appAction = key(s_app, &TabBox::slotWalkThroughCurrentAppWindows, {Qt::MetaModifier | Qt::Key_QuoteLeft, Qt::AltModifier | Qt::Key_QuoteLeft});
     QAction *appRevAction = key(s_appRev, &TabBox::slotWalkBackThroughCurrentAppWindows, {Qt::MetaModifier | Qt::Key_AsciiTilde, Qt::AltModifier | Qt::Key_AsciiTilde});
-    KGlobalAccel::setInverseShortcutActions(appAction, appRevAction, KGlobalAccel::OptionalCoupling);
+    KGlobalAccel::setInverseShortcutActions(appAction, appRevAction);
 
     QAction *windowsAltAction = key(s_windowsAlt, &TabBox::slotWalkThroughWindowsAlternative);
     QAction *windowsAltRevAction = key(s_windowsAltRev, &TabBox::slotWalkBackThroughWindowsAlternative);
-    KGlobalAccel::setInverseShortcutActions(windowsAltAction, windowsAltRevAction, KGlobalAccel::OptionalCoupling);
+    KGlobalAccel::setInverseShortcutActions(windowsAltAction, windowsAltRevAction);
 
     QAction *appAltAction = key(s_appAlt, &TabBox::slotWalkThroughCurrentAppWindowsAlternative);
     QAction *appAltRevAction = key(s_appAltRev, &TabBox::slotWalkBackThroughCurrentAppWindowsAlternative);
-    KGlobalAccel::setInverseShortcutActions(appAltAction, appAltRevAction, KGlobalAccel::OptionalCoupling);
+    KGlobalAccel::setInverseShortcutActions(appAltAction, appAltRevAction);
 
     connect(KGlobalAccel::self(), &KGlobalAccel::globalShortcutChanged, this, [this](QAction *action) {
         globalShortcutChanged(action, KGlobalAccel::self()->shortcut(action));
