@@ -681,6 +681,32 @@ void WorkspaceScene::postPaint()
 
 void WorkspaceScene::paint(const RenderTarget &renderTarget, const QPoint &deviceOffset, const Region &deviceRegion)
 {
+    // TODO: Reconsider how the CrossFadeEffect captures the initial window contents to remove
+    // null pointer delegate checks in "should render item" and "should render hole" checks.
+    const auto filter = [this](Item *item) {
+        return painted_delegate && !painted_delegate->shouldRenderItem(item);
+    };
+    const auto holeFilter = [this](Item *item) {
+        return painted_delegate && painted_delegate->shouldRenderHole(item);
+    };
+
+    // since effects don't currently handle not having any OpenGL context current,
+    // prepare all the multi-gpu copies before rendering
+    for (const Phase2Data &paintData : std::as_const(m_paintContext.phase2Data)) {
+        if (paintData.deviceRegion.isEmpty()) {
+            continue;
+        }
+        if (!m_renderer->prepareItems(paintData.item, filter, holeFilter)) {
+            return;
+        }
+    }
+    if (!m_renderer->prepareItems(m_containerItem.get(), filter, holeFilter)) {
+        return;
+    }
+    if (!m_renderer->prepareItems(m_overlayItem.get(), filter, holeFilter)) {
+        return;
+    }
+
     RenderViewport viewport(painted_delegate->viewport(), painted_delegate->scale(), renderTarget, deviceOffset);
 
     m_renderer->beginFrame(renderTarget, viewport);
