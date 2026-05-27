@@ -68,7 +68,6 @@ find_package(Qt6 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
     Svg
 )
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/qt-private.cmake)
 find_package(Qt6Test ${QT_MIN_VERSION} CONFIG QUIET)
 set_package_properties(Qt6Test PROPERTIES
     PURPOSE "Required for tests"
